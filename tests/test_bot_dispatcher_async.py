@@ -71,6 +71,9 @@ class TestBotCommandAsync(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCommandDispatcherAsync(unittest.IsolatedAsyncioTestCase):
+    def test_nl_prefilter_matches_bse_codes(self):
+        self.assertIsNotNone(CommandDispatcher._NL_PREFILTER.search("帮我分析430001"))
+
     async def test_dispatch_async_awaits_command_execute_async(self):
         dispatcher = CommandDispatcher()
         command = DummyCommand()
@@ -238,6 +241,46 @@ class TestChatCommandCompatibility(unittest.TestCase):
         self.assertEqual(response.text, "ok")
         executor.chat.assert_called_once()
         self.assertEqual(executor.chat.call_args.kwargs["session_id"], "feishu_u1")
+
+    def test_chat_command_scopes_group_session_by_chat_id(self):
+        from bot.commands.chat import ChatCommand
+
+        command = ChatCommand()
+        config = SimpleNamespace(is_agent_available=lambda: True)
+        executor = MagicMock()
+        executor.chat.return_value = SimpleNamespace(success=True, content="ok", error=None)
+        db = MagicMock()
+        db.conversation_session_exists.side_effect = lambda session_id: session_id == "feishu_u1"
+        message = _make_message("/chat hello")
+        message.chat_type = ChatType.GROUP
+        message.chat_id = "group-1"
+
+        with patch("bot.commands.chat.get_config", return_value=config), \
+             patch("src.storage.get_db", return_value=db), \
+             patch("src.agent.factory.build_agent_executor", return_value=executor):
+            response = command.execute(message, ["hello"])
+
+        self.assertEqual(response.text, "ok")
+        executor.chat.assert_called_once()
+        self.assertEqual(executor.chat.call_args.kwargs["session_id"], "feishu_u1:group-1:chat")
+
+
+class TestHistoryCommandCompatibility(unittest.TestCase):
+    def test_history_clear_uses_group_scoped_session(self):
+        from bot.commands.history import HistoryCommand
+
+        command = HistoryCommand()
+        db = MagicMock()
+        db.delete_conversation_session.side_effect = lambda session_id: 1 if session_id == "feishu_u1:group-1:chat" else 0
+        message = _make_message("/history clear")
+        message.chat_type = ChatType.GROUP
+        message.chat_id = "group-1"
+
+        with patch("src.storage.get_db", return_value=db):
+            response = command.execute(message, ["clear"])
+
+        self.assertIn("1 条消息", response.text)
+        db.delete_conversation_session.assert_called_once_with("feishu_u1:group-1:chat")
 
 
 class TestDispatcherBaseException(unittest.TestCase):

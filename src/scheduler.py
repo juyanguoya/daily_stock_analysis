@@ -248,6 +248,9 @@ def run_with_schedule(
         task: 要执行的任务函数
         schedule_time: 每日执行时间
         run_immediately: 是否立即执行一次
+        background_tasks: 可选的后台任务定义列表。每项为一个字典，
+            需包含 `task` 与 `interval_seconds`，可选包含 `name`
+            和 `run_immediately`。`interval_seconds` 单位为秒。
     """
     scheduler = Scheduler(schedule_time=schedule_time)
     for entry in background_tasks or []:

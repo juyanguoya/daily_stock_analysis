@@ -7,16 +7,29 @@ import logging
 from typing import List, Optional
 
 from bot.commands.base import BotCommand
-from bot.models import BotMessage, BotResponse
+from bot.models import BotMessage, BotResponse, ChatType
 from src.config import get_config
 
 logger = logging.getLogger(__name__)
 
 
+def _scoped_chat_session_id(message: BotMessage) -> str:
+    """Return the chat session id for the current conversation scope."""
+    base_session_id = f"{message.platform}_{message.user_id}"
+    if message.chat_type == ChatType.GROUP and message.chat_id:
+        return f"{base_session_id}:{message.chat_id}:chat"
+    return f"{base_session_id}:chat"
+
+
 def _resolve_chat_session_id(message: BotMessage) -> str:
-    """Prefer the legacy bot chat session id when prior history already exists."""
+    """Prefer the legacy private-chat session id when prior history already exists."""
     legacy_session_id = f"{message.platform}_{message.user_id}"
-    session_id = f"{legacy_session_id}:chat"
+    session_id = _scoped_chat_session_id(message)
+
+    # Group chats must stay room-scoped so parallel threads in different groups
+    # do not share one persisted conversation history.
+    if message.chat_type == ChatType.GROUP and message.chat_id:
+        return session_id
 
     try:
         from src.storage import get_db

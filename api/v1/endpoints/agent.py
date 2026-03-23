@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -276,6 +277,22 @@ def _build_executor(config, skills: Optional[List[str]] = None):
     return build_agent_executor(config, skills=skills)
 
 
+async def _run_research_in_background(
+    agent,
+    question: str,
+    context: Optional[Dict[str, Any]],
+    *,
+    timeout: int,
+):
+    """Run deep research in a dedicated pool so API timeouts do not block shared workers."""
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="agent-research")
+    future = pool.submit(agent.research, question, context)
+    try:
+        return await asyncio.wait_for(asyncio.wrap_future(future), timeout=timeout)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
 # ============================================================
 # Deep research endpoint
 # ============================================================
@@ -324,13 +341,15 @@ async def agent_research(request: ResearchRequest):
         )
 
         research_timeout = getattr(config, "agent_deep_research_timeout", 180)
-        loop = asyncio.get_running_loop()
-
-        task = loop.run_in_executor(None, agent.research, question, context)
 
         try:
-            result = await asyncio.wait_for(task, timeout=research_timeout)
-        except asyncio.TimeoutError:
+            result = await _run_research_in_background(
+                agent,
+                question,
+                context,
+                timeout=research_timeout,
+            )
+        except (asyncio.TimeoutError, FuturesTimeoutError):
             logger.warning("Agent research API timed out after %ss", research_timeout)
             return ResearchResponse(
                 success=False,

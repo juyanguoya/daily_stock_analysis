@@ -124,7 +124,7 @@ class ResearchAgent:
         duration = round(time.time() - t0, 2)
 
         return ResearchResult(
-            success=bool(report.get("content")),
+            success=not report.get("error"),
             report=report.get("content", ""),
             sub_questions=questions,
             findings_count=len(all_findings),

@@ -1437,6 +1437,18 @@ class TestResearchAgentFilteredRegistry(unittest.TestCase):
         self.assertEqual(result["content"], "Final research report")
         llm_adapter.call_text.assert_called_once()
 
+    def test_research_marks_synthesis_fallback_as_failure(self):
+        from src.agent.research import ResearchAgent
+
+        agent = ResearchAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        with patch.object(agent, "_decompose_query", return_value={"questions": ["Q1"], "tokens": 3}), \
+             patch.object(agent, "_research_sub_question", return_value={"summary": "done", "tokens": 7}), \
+             patch.object(agent, "_synthesise_report", return_value={"content": "fallback", "tokens": 5, "error": "boom"}):
+            result = agent.research("分析 600519")
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error, "boom")
+
 
 class TestAgentResearchEndpoint(unittest.IsolatedAsyncioTestCase):
     async def test_agent_research_returns_timeout_response(self):
@@ -1449,12 +1461,9 @@ class TestAgentResearchEndpoint(unittest.IsolatedAsyncioTestCase):
             agent_deep_research_timeout=1,
             is_agent_available=lambda: True,
         )
-        fake_loop = SimpleNamespace(
-            run_in_executor=AsyncMock(side_effect=FuturesTimeoutError),
-        )
 
         with patch("api.v1.endpoints.agent.get_config", return_value=config), \
-             patch("api.v1.endpoints.agent.asyncio.get_running_loop", return_value=fake_loop), \
+             patch("api.v1.endpoints.agent._run_research_in_background", new=AsyncMock(side_effect=FuturesTimeoutError)), \
              patch("src.agent.factory.get_tool_registry", return_value=MagicMock()), \
              patch("src.agent.llm_adapter.LLMToolAdapter", return_value=MagicMock()):
             response = await agent_research(ResearchRequest(question="600519 风险"))

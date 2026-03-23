@@ -416,12 +416,12 @@ User: "analyze TSLA and NVDA using trend strategy"
 
     # Cheap pre-filter: only invoke LLM when the message plausibly contains
     # stock-related content.  This regex checks for:
-    #   - 6-digit A-share codes (0/3/6/8 prefixes)
+    #   - 6-digit A-share / BSE codes (0/3/6 and 43/83/87/88/92 prefixes)
     #   - HK codes like hk00700
     #   - 2-5 uppercase ASCII letters (US tickers)
     #   - Common finance/analysis keywords (Chinese and English)
     _NL_PREFILTER = re.compile(
-        r'[036]\d{5}'                          # A-share code
+        r'(?:[036]\d{5}|(?:43|83|87|88|92)\d{4})'  # A-share / BSE 6-digit codes
         r'|(?:hk|HK)\d{5}'                    # HK code
         r'|(?<![a-zA-Z])[A-Z]{2,5}(?![a-zA-Z])'  # US ticker — UPPERCASE only, no IGNORECASE
         r'|分析|看看|查一?下|研究|诊断|怎么样|走势|趋势'

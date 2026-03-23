@@ -351,9 +351,10 @@ class SystemConfigService:
         for item in items:
             key = item["key"].upper()
             value = item["value"]
+            field_schema = get_field_definition(key, value)
+            normalized_value = self._normalize_value_for_storage(value, field_schema)
             submitted_keys.add(key)
-            updates.append((key, value))
-            field_schema = get_field_definition(key)
+            updates.append((key, normalized_value))
             if bool(field_schema.get("is_sensitive", False)):
                 sensitive_keys.add(key)
 
@@ -523,7 +524,7 @@ class SystemConfigService:
         if not value.strip() and not is_required:
             return issues
 
-        if "\n" in value:
+        if ("\n" in value or "\r" in value) and data_type != "json":
             issues.append(
                 {
                     "key": key,
@@ -662,6 +663,22 @@ class SystemConfigService:
                 )
 
         return issues
+
+    @staticmethod
+    def _normalize_value_for_storage(value: str, field_schema: Dict[str, Any]) -> str:
+        """Normalize submitted values before persisting to the single-line .env file."""
+        if field_schema.get("data_type", "string") != "json":
+            return value
+
+        if not value.strip():
+            return value
+
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+
+        return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
 
     @staticmethod
     def _validate_numeric_range(key: str, numeric_value: float, validation: Dict[str, Any]) -> List[Dict[str, Any]]:

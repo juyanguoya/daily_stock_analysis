@@ -325,6 +325,40 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertTrue(validation["valid"])
         self.assertEqual(validation["issues"], [])
 
+    def test_validate_accepts_multiline_json(self) -> None:
+        validation = self.service.validate(items=[{
+            "key": "AGENT_EVENT_ALERT_RULES_JSON",
+            "value": (
+                "[\n"
+                '  {"stock_code":"600519","alert_type":"price_cross","direction":"above","price":1800}\n'
+                "]"
+            ),
+        }])
+
+        self.assertTrue(validation["valid"])
+        self.assertEqual(validation["issues"], [])
+
+    def test_update_minifies_multiline_json_before_storage(self) -> None:
+        response = self.service.update(
+            config_version=self.manager.get_config_version(),
+            items=[{
+                "key": "AGENT_EVENT_ALERT_RULES_JSON",
+                "value": (
+                    "[\n"
+                    '  {"stock_code":"600519","alert_type":"price_cross","direction":"above","price":1800}\n'
+                    "]"
+                ),
+            }],
+            reload_now=False,
+        )
+
+        self.assertTrue(response["success"])
+        current_map = self.manager.read_config_map()
+        self.assertEqual(
+            current_map["AGENT_EVENT_ALERT_RULES_JSON"],
+            '[{"stock_code":"600519","alert_type":"price_cross","direction":"above","price":1800}]',
+        )
+
     def test_validate_accepts_legacy_agent_orchestrator_mode_alias(self) -> None:
         validation = self.service.validate(items=[{"key": "AGENT_ORCHESTRATOR_MODE", "value": "strategy"}])
 

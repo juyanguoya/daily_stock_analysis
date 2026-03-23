@@ -10,7 +10,7 @@ import logging
 from typing import List, Optional
 
 from bot.commands.base import BotCommand
-from bot.models import BotMessage, BotResponse
+from bot.models import BotMessage, BotResponse, ChatType
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,14 @@ def _user_prefix(message: BotMessage) -> str:
 def _legacy_chat_session_id(message: BotMessage) -> str:
     """Legacy chat session id used before the colon-scoped format."""
     return f"{message.platform}_{message.user_id}"
+
+
+def _current_chat_session_id(message: BotMessage) -> str:
+    """Current chat session id for the active conversation scope."""
+    prefix = _user_prefix(message)
+    if message.chat_type == ChatType.GROUP and message.chat_id:
+        return f"{prefix}{message.chat_id}:chat"
+    return f"{prefix}chat"
 
 
 class HistoryCommand(BotCommand):
@@ -67,12 +75,14 @@ class HistoryCommand(BotCommand):
 
         prefix = _user_prefix(message)
         legacy_chat_session_id = _legacy_chat_session_id(message)
+        current_chat_session_id = _current_chat_session_id(message)
 
         # /history clear — clear current user's chat session
         if args and args[0].lower() in ("clear", "清除"):
             try:
-                deleted = db.delete_conversation_session(f"{prefix}chat")
-                deleted += db.delete_conversation_session(legacy_chat_session_id)
+                deleted = db.delete_conversation_session(current_chat_session_id)
+                if current_chat_session_id == f"{prefix}chat":
+                    deleted += db.delete_conversation_session(legacy_chat_session_id)
                 return BotResponse.text_response(
                     f"✅ 已清除当前会话 ({deleted} 条消息)"
                 )
