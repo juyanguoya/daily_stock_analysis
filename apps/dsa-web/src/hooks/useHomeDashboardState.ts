@@ -26,6 +26,7 @@ export function useHomeDashboardState() {
       markdownDrawerOpen: state.markdownDrawerOpen,
       notify: state.notify,
       setQuery: state.setQuery,
+      setNotify: state.setNotify,
       clearError: state.clearError,
       loadInitialHistory: state.loadInitialHistory,
       refreshHistory: state.refreshHistory,
