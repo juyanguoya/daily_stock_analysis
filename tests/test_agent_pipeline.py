@@ -287,6 +287,31 @@ class TestAgentFactorySkillBaseline(unittest.TestCase):
         self.assertFalse(kwargs["use_legacy_default_prompt"])
         skill_manager.activate.assert_called_once_with(["custom_default"])
 
+    def test_custom_bull_trend_override_does_not_use_legacy_prompt(self):
+        config = SimpleNamespace(
+            agent_arch="single",
+            agent_skills=[],
+            agent_max_steps=10,
+            agent_orchestrator_timeout_s=600,
+        )
+        kwargs, skill_manager = self._run_factory_case(
+            config,
+            request_skills=None,
+            skill_catalog=[
+                self._make_skill(
+                    "bull_trend",
+                    default_active=True,
+                    default_priority=10,
+                    source="/tmp/custom-skills/bull_trend.yaml",
+                ),
+            ],
+            instructions="custom bull_trend instructions",
+        )
+
+        self.assertEqual(kwargs["default_skill_policy"], "")
+        self.assertFalse(kwargs["use_legacy_default_prompt"])
+        skill_manager.activate.assert_called_once_with(["bull_trend"])
+
 
 # ============================================================
 # AgentResult to AnalysisResult conversion

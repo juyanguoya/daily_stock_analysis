@@ -127,6 +127,27 @@ def _resolve_selected_skill_ids(
     return list(default_skills), False
 
 
+def _should_use_legacy_default_prompt(
+    *,
+    skills_to_activate: List[str],
+    explicit_skill_selection: bool,
+    skill_catalog: List[object],
+) -> bool:
+    """Keep the legacy prompt only for the implicit built-in bull_trend fallback."""
+    if explicit_skill_selection or skills_to_activate != ["bull_trend"]:
+        return False
+
+    bull_trend_skill = next(
+        (
+            skill
+            for skill in skill_catalog
+            if str(getattr(skill, "name", "")).strip() == "bull_trend"
+        ),
+        None,
+    )
+    return getattr(bull_trend_skill, "source", None) == "builtin"
+
+
 def get_tool_registry():
     """Return a cached ToolRegistry (built once, shared across requests)."""
     global _TOOL_REGISTRY
@@ -224,9 +245,10 @@ def resolve_skill_prompt_state(config=None, skills: Optional[List[str]] = None) 
         available_skill_ids=available_skill_ids,
     )
 
-    use_legacy_default_prompt = (
-        not explicit_skill_selection
-        and skills_to_activate == ["bull_trend"]
+    use_legacy_default_prompt = _should_use_legacy_default_prompt(
+        skills_to_activate=skills_to_activate,
+        explicit_skill_selection=explicit_skill_selection,
+        skill_catalog=skill_catalog,
     )
 
     skill_manager.activate(skills_to_activate)
